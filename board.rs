@@ -78,7 +78,7 @@ impl Board {
                 Ai => self.state = AiWins,
                 _ => fail!()
             }
-        } else if self.empty_cells().len() == 0 {
+        } else if self.cells_with_mark(Empty).len() == 0 {
             self.state = CatsGame;
         } else {
             self.state = InProgress;
@@ -86,11 +86,8 @@ impl Board {
         self.state
     }
 
-    pub fn empty_cells<'a>(&'a self) -> Vec<&'a Cell> {
-        self.cells.iter().filter(|&cell| match cell.mark {
-            Empty=>true,
-            _=>false
-        }).collect()
+    pub fn cells_with_mark<'a>(&'a self, mark : Mark) -> Vec<&'a Cell> {
+        self.cells.iter().filter(|&cell| cell.mark == mark).collect()
     }
 
     pub fn iter<'a>(&'a self, cell : &'a Cell, direction : (int,int)) -> BoardIterator<'a> {
@@ -98,15 +95,11 @@ impl Board {
     }
 
     fn check_for_win(&self, changedCell : &Cell) -> bool {
-        if self.check_win_for_direction(changedCell,(0,1)) { return true; }
-        if self.check_win_for_direction(changedCell,(1,0)) { return true; }
-        if self.check_win_for_direction(changedCell,(1,1)) {return true; }
-        if self.check_win_for_direction(changedCell,(1,-1)) {return true;}
-        
-        false
+        let directions = [(0,1),(1,0),(1,1),(1,-1)];
+        directions.iter().map(|&dir| self.count_consecutive(changedCell,dir)).max_by(|&x| x).unwrap() == self.k
     }
         
-    fn check_win_for_direction(&self,changedCell : &Cell, direction : (int,int)) -> bool {
+    pub fn count_consecutive(&self,changedCell : &Cell, direction : (int,int)) -> uint {
         let forward = box self.iter(changedCell,direction);
         let reversed = box self.iter(changedCell,direction).rev();
         let mut iters =  [forward as Box<Iterator<&Cell>>, reversed as Box<Iterator<&Cell>>];
@@ -127,7 +120,7 @@ impl Board {
             }
         }
 
-        count == self.k
+        count
     }
 }
 

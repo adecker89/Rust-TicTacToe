@@ -3,7 +3,7 @@ use std::io;
 use board::{Board,BoardState};
 use board::{PlayerWins,AiWins,CatsGame,InProgress};
 use board::{Player,Ai,Empty};
-use ai::{minimax,MinimaxDelegate};
+use ai::{minimax,minimax_alpha_beta,MinimaxDelegate};
 
 mod board;
 mod ai;
@@ -12,7 +12,7 @@ pub struct TicTacToeAiDelegate;
 
 impl ai::MinimaxDelegate<Board,(uint,uint)> for TicTacToeAiDelegate {
     fn possible_moves<'a> (&self, current_state : &'a mut Board, depth : uint) -> Vec<(uint,uint)> {
-        current_state.empty_cells().iter().map(|&cell| (cell.x,cell.y)).collect()
+        current_state.cells_with_mark(Empty).iter().map(|&cell| (cell.x,cell.y)).collect()
     }
 
     fn do_move(&self, board : & mut Board, move : &(uint,uint), depth : uint) {
@@ -37,10 +37,12 @@ impl ai::MinimaxDelegate<Board,(uint,uint)> for TicTacToeAiDelegate {
 
     fn score(&self, board : & mut  Board, depth : uint) -> int {
         match board.get_state() {
-            AiWins => 1000,
-            PlayerWins => -1000,
-            _ => 0
+            AiWins => return 1000 - depth as int,
+            PlayerWins => return depth as int - 1000,
+            _ => ()
         }
+
+        0
     }
 
     fn shouldMaximize(&self, board : & mut  Board, depth : uint) -> bool {
@@ -101,7 +103,7 @@ fn get_ai_move(board: &Board) -> (uint, uint) {
 }
 
 fn get_ai_move_simple(board: &Board) -> (uint, uint) {    
-   let cells = board.empty_cells();
+   let cells = board.cells_with_mark(Empty);
    let cell = cells.get(0);
    (cell.x,cell.y)
 }
@@ -109,7 +111,7 @@ fn get_ai_move_simple(board: &Board) -> (uint, uint) {
 fn get_ai_move_minimax(board: &Board) -> (uint, uint) {
     let delegate = box TicTacToeAiDelegate as Box<MinimaxDelegate<Board,(uint,uint)>>;
     let mut scrap_board = board.clone();
-    match minimax(delegate,&mut scrap_board,0) {
+    match minimax_alpha_beta(delegate,&mut scrap_board) {
         (move,_) => move
     }
 }
