@@ -1,5 +1,6 @@
 use std::int;
 use std::cmp;
+use std::fmt;
 
 pub trait MinimaxDelegate<S,M> {
     fn possible_moves<'a> (&self, current_state : &'a mut S, depth : uint) -> Vec<M>;
@@ -43,58 +44,63 @@ pub fn minimax<'a,S,M>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S, depth
         (idx,score) => (moves.swap_remove(idx).unwrap(),score.clone())
     }
 }
-pub fn minimax_alpha_beta<'a,S,M>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S)  -> (M, int) {
+pub fn minimax_alpha_beta<'a,S,M  : fmt::Show>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S)  -> (M, int) {
     minimax_alpha_beta_helper(delegate,state,0,int::MIN,int::MAX)
 }
 
-fn minimax_alpha_beta_helper<'a,S,M>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S, depth : uint, alpha : int, beta : int) -> (M, int) {
+fn minimax_alpha_beta_helper<'a,S,M : fmt::Show>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S, depth : uint, alpha : int, beta : int) -> (M, int) {
     let mut moves = delegate.possible_moves(state,depth);
+    
 
     if moves.len() == 0 {
         fail!("should_continue must return false before all possible moves are exhausted");
     }
 
-    let mut alpha = alpha;
-    let mut beta = beta;
+    let mut a = alpha;
+    let mut b = beta;
     let mut best_move_idx = 0;
     let maximizing = delegate.shouldMaximize(state,depth);
 
-    for (idx,move) in moves.iter().enumerate() {
-        delegate.do_move(state,move,depth);
+    {
+        let mut scores = Vec::with_capacity(moves.len());
+        for (idx,move) in moves.iter().enumerate() {
+            delegate.do_move(state,move,depth);
 
-        let score = if !delegate.should_continue(state,depth) || depth+1 == delegate.max_plies() {
-            //base case
-            delegate.score(state,depth+1)
-        } else {
-            //recursive case
-            let move_score = minimax_alpha_beta_helper(delegate,state,depth+1,alpha,beta);
-            match move_score { (_,score) => score }
-        };
-                       
-        if maximizing {
-            alpha = cmp::max(alpha,score);
-            if alpha == score {
-                best_move_idx = idx;
+            let score = if !delegate.should_continue(state,depth) || depth+1 == delegate.max_plies() {
+                //base case
+                delegate.score(state,depth+1)
+            } else {
+                //recursive case
+                let move_score = minimax_alpha_beta_helper(delegate,state,depth+1,a,b);
+                match move_score { (_,score) => score }
+            };
+
+            scores.push((move,score));
+                           
+            if maximizing {
+                if score > a {
+                    a = score;
+                    best_move_idx = idx;
+                }
+            } else {
+                if score < b {
+                    b = score;
+                    best_move_idx = idx;
+                }
             }
-        } else {
-            beta = cmp::min(beta,score);
-            if beta == score {
-                best_move_idx = idx;
+
+            delegate.undo_move(state,move,depth);
+
+            if a >= b {
+                //if depth < 2 {println!("pruning depth:{} after {} subtrees",depth,idx);}
+                break;
             }
         }
-
-        delegate.undo_move(state,move,depth);
-
-        if alpha >= beta {
-            println!("pruning depth:{} after {} subtrees",depth,idx);
-            break;
-        }
+        if depth < 2 {println!("depth:{} scores:{} move:{}",depth,scores,moves.get(best_move_idx));}
     }
-
-    println!("depth:{} score:{}",depth,if maximizing {alpha} else {beta});
     if maximizing {
-        (moves.swap_remove(best_move_idx).unwrap(),alpha)
+        (moves.swap_remove(best_move_idx).unwrap(),a)
     } else {
-        (moves.swap_remove(best_move_idx).unwrap(),beta)
+        (moves.swap_remove(best_move_idx).unwrap(),b)
     }
 }
