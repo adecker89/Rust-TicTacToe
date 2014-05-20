@@ -1,8 +1,8 @@
 
 #![crate_type = "staticlib"]
 
-extern crate sync;
 extern crate libc;
+extern crate test;
 
 use libc::types::os::arch::c95::c_uint;
 use board::{Board,BoardState};

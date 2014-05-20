@@ -1,106 +1,135 @@
 use std::int;
 use std::cmp;
 use std::fmt;
+use board::{Board, BoardState, Cell, Mark};
+use board::{PlayerWins,AiWins,CatsGame,InProgress};
+use board::{Player,Ai,Empty};
+use minimax::{MinimaxDelegate,minimax,minimax_alpha_beta};
 
-pub trait MinimaxDelegate<S,M> {
-    fn possible_moves<'a> (&self, current_state : &'a mut S, depth : uint) -> Vec<M>;
-    fn do_move(&self, state : & mut  S, move : &M, depth : uint);
-    fn undo_move(&self, state : & mut  S, move : &M, depth : uint);
-    fn should_continue(&self, state : & mut  S, depth : uint) -> bool;
-    fn score(&self, state : & mut  S, depth : uint) -> int;
-    fn shouldMaximize(&self, state : & mut  S, depth : uint) -> bool;
-    fn max_plies(&self) -> uint;
+#[deriving(Clone)]
+pub enum Mode {
+    Simple,Minimax,AlphaBeta
 }
 
-pub fn minimax<'a,S,M>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S, depth : uint) -> (M, int) {
-    let mut moves = delegate.possible_moves(state,depth);
-    let mut scores = Vec::with_capacity(moves.len());
+#[deriving(Clone)]
+pub struct Ai {
+    mode : Mode,
+    plies : uint
+}
 
-    if moves.len() == 0 {
-        fail!("should_continue must return false before all possible moves are exhausted");
+impl Ai {
+    pub fn new(mode : Mode, plies : uint) -> Ai {
+        Ai{mode : mode, plies : plies }
     }
 
-    for move in moves.iter() {
-        delegate.do_move(state,move,depth);
-        if !delegate.should_continue(state,depth) || depth+1 == delegate.max_plies() {
-            //base case
-            scores.push(delegate.score(state,depth+1));
-        } else {
-            //recursive case
-            let move_score = minimax(delegate,state,depth+1);
-            match move_score {(_,score) => scores.push(score)};
+    pub fn get_move(&self, board: &Board) -> (uint, uint) {
+        match self.mode {
+            Simple => self.simple(board),
+            Minimax => self.minimax(board),
+            AlphaBeta => self.alpha_beta(board)
         }
-        delegate.undo_move(state,move,depth);
     }
 
-    println!("depth:{} scores:{}",depth,scores);
-    let score_pair = if delegate.shouldMaximize(state,depth) {
-        scores.iter().enumerate().max_by(|&(_,x)| x).unwrap()
-    } else {
-        scores.iter().enumerate().min_by(|&(_,x)| x).unwrap()
-    };
-
-    match score_pair {
-        (idx,score) => (moves.swap_remove(idx).unwrap(),score.clone())
-    }
-}
-pub fn minimax_alpha_beta<'a,S,M  : fmt::Show>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S)  -> (M, int) {
-    minimax_alpha_beta_helper(delegate,state,0,int::MIN,int::MAX)
-}
-
-fn minimax_alpha_beta_helper<'a,S,M : fmt::Show>(delegate: &MinimaxDelegate<S,M>, state : &'a mut S, depth : uint, alpha : int, beta : int) -> (M, int) {
-    let mut moves = delegate.possible_moves(state,depth);
-    
-
-    if moves.len() == 0 {
-        fail!("should_continue must return false before all possible moves are exhausted");
+    fn simple(&self, board: &Board) -> (uint, uint) {    
+       let cells = board.cells_with_mark(Empty);
+       let cell = cells.get(0);
+       (cell.x,cell.y)
     }
 
-    let mut a = alpha;
-    let mut b = beta;
-    let mut best_move_idx = 0;
-    let maximizing = delegate.shouldMaximize(state,depth);
-
-    {
-        let mut scores = Vec::with_capacity(moves.len());
-        for (idx,move) in moves.iter().enumerate() {
-            delegate.do_move(state,move,depth);
-
-            let score = if !delegate.should_continue(state,depth) || depth+1 == delegate.max_plies() {
-                //base case
-                delegate.score(state,depth+1)
-            } else {
-                //recursive case
-                let move_score = minimax_alpha_beta_helper(delegate,state,depth+1,a,b);
-                match move_score { (_,score) => score }
-            };
-
-            scores.push((move,score));
-                           
-            if maximizing {
-                if score > a {
-                    a = score;
-                    best_move_idx = idx;
-                }
-            } else {
-                if score < b {
-                    b = score;
-                    best_move_idx = idx;
-                }
-            }
-
-            delegate.undo_move(state,move,depth);
-
-            if a >= b {
-                //if depth < 2 {println!("pruning depth:{} after {} subtrees",depth,idx);}
-                break;
-            }
+    fn minimax(&self, board: &Board) -> (uint, uint) {
+        //let delegate = box TicTacToeAiDelegate as Box<MinimaxDelegate<Board,(uint,uint)>>;
+        let mut scrap_board = board.clone();
+        match minimax(self,&mut scrap_board,0) {
+            (move,_) => move
         }
-        if depth < 2 {println!("depth:{} scores:{} move:{}",depth,scores,moves.get(best_move_idx));}
     }
-    if maximizing {
-        (moves.swap_remove(best_move_idx).unwrap(),a)
-    } else {
-        (moves.swap_remove(best_move_idx).unwrap(),b)
+
+    fn alpha_beta(&self, board: &Board) -> (uint, uint) {
+        let delegate = box self.clone() as Box<MinimaxDelegate<Board,(uint,uint)>>;
+        let mut scrap_board = board.clone();
+        match minimax_alpha_beta(delegate,&mut scrap_board) {
+            (move,_) => move
+        }
+    }
+
+    fn score_cell(&self, board : &mut Board, cell : &Cell) -> uint{
+        let directions = [(0,1),(1,0),(1,1),(1,-1)];
+        directions.iter().fold(0, |a, &dir| a + self.score_cell_for_direction(board,cell,dir))
+    }
+
+    fn score_cell_for_direction(&self, board : &mut Board, cell : &Cell, dir : (int,int)) -> uint {
+        let mut iters = [box board.iter(cell,dir) as Box<Iterator<&Cell>>,
+                         box board.iter(cell,dir).rev() as Box<Iterator<&Cell>>];
+
+        let iter = board.iter(cell,dir);
+        iter.enumerate();
+
+        let mark = cell.mark;
+
+        for iter  in iters.mut_iter() {
+            //let iter : &Iterator<&Cell> = iter;
+            //iter.enumerate();
+            // let advance_iter = iter.enumerate().advance(
+            //     |(idx,cell)| idx < board.get_k() && !(cell.mark == mark || cell.mark == Empty)
+            // );
+            // let mark_count = advance_iter.fold(0,|a,&(idx,cell)| a);
+            // for cell in iter{
+            //     if cell.mark == changedCell.mark || (!breakOnEmpty && cell.mark == Empty) {
+            //         count+=1;
+            //     } else {
+            //         break;
+            //     }
+            // }
+        }
+        0
+    }
+}
+
+impl MinimaxDelegate<Board,(uint,uint)> for Ai {
+    fn possible_moves<'a> (&self, current_state : &'a mut Board, depth : uint) -> Vec<(uint,uint)> {
+        current_state.cells_with_mark(Empty).iter().map(|&cell| (cell.x,cell.y)).collect()
+    }
+
+    fn do_move(&self, board : & mut Board, &move : &(uint,uint), depth : uint) {
+        let mark_type = if self.shouldMaximize(board,depth) { Ai } else { Player };
+        board.set_mark(move,mark_type);
+    }
+
+    fn should_continue(&self, board : & mut Board, depth : uint) -> bool{
+        match board.get_state() {
+            PlayerWins | AiWins | CatsGame => false,
+            _ => true
+        }
+    }
+
+    fn undo_move(&self, board : & mut  Board, &move : &(uint,uint), depth : uint) {
+        board.set_mark(move,Empty);
+    }
+
+    fn score(&self, board : & mut  Board, depth : uint) -> int {
+        match board.get_state() {
+            AiWins => return int::MAX - depth as int,
+            PlayerWins => return int::MIN + depth as int,
+            _ => ()
+        }       
+        let directions = [(0,1),(1,0),(1,1),(1,-1)];
+        let mut score = 0;
+        for cell in board.cells_with_mark(Ai).move_iter() {
+            score+= directions.iter().fold(0, |sum, &dir| sum + board.count_consecutive(cell,dir,true)) as int * 100;
+        }
+
+        for cell in board.cells_with_mark(Player).move_iter() {
+            score-= directions.iter().fold(0, |sum, &dir| sum + board.count_consecutive(cell,dir,true)) as int * 100;
+        }        
+
+        score
+    }
+
+    fn shouldMaximize(&self, board : & mut  Board, depth : uint) -> bool {
+        depth % 2 == 0
+    }
+
+    fn max_plies(&self) -> uint {
+        self.plies
     }
 }

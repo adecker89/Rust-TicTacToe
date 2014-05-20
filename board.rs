@@ -9,6 +9,17 @@ pub enum BoardState {
     CatsGame,
 }
 
+impl fmt::Show for BoardState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &PlayerWins => write!(f.buf,"Player Wins!"),
+            &AiWins => write!(f.buf,"Ai Wins!"),
+            &CatsGame => write!(f.buf,"Cats Game"),
+            &InProgress => write!(f.buf,"Game still in progress"),
+        }
+    }
+}
+
 #[deriving(Eq)]
 #[deriving(Clone)]
 pub enum Mark {
@@ -68,7 +79,7 @@ impl Board {
         self.state
     }
 
-    pub fn set_mark(& mut self, x : uint, y : uint, mark : Mark)-> BoardState {
+    pub fn set_mark(& mut self, (x,y) : (uint,uint), mark : Mark)-> BoardState {
         if x >= self.cols || y >= self.rows {fail!("index out of bounds")};
         let cell_index = y * self.cols + x;
         self.cells.get_mut(cell_index).mark = mark;
@@ -116,17 +127,12 @@ impl Board {
         let mut iters =  [forward as Box<Iterator<&Cell>>, reversed as Box<Iterator<&Cell>>];
 
         let mut count = 1;
-        for iter in iters.mut_iter() {
-            loop {
-                match iter.next() {
-                    Some(&cell) => {
-                        if cell.mark == changedCell.mark || (!breakOnEmpty && cell.mark == Empty) {
-                            count+=1;
-                        } else {
-                            break;
-                        }
-                    }
-                    None => break
+        for mut iter in iters.mut_iter() {
+            for cell in iter {
+                if cell.mark == changedCell.mark || (!breakOnEmpty && cell.mark == Empty) {
+                    count+=1;
+                } else {
+                    break;
                 }
             }
         }
@@ -215,26 +221,26 @@ impl<'a> DoubleEndedIterator<&'a Cell> for BoardIterator<'a> {
 #[test]
 fn test_count_consecutive() {
     let mut board = Board::new(5,5,4);
-    board.set_mark(0,0,Ai);
+    board.set_mark((0,0),Ai);
     assert!(board.count_consecutive(board.get_cell(0,0),(0,1),true)==1);
 
-    board.set_mark(1,0,Ai);
+    board.set_mark((1,0),Ai);
     assert!(board.count_consecutive(board.get_cell(0,0),(1,0),true)==2);
     assert!(board.count_consecutive(board.get_cell(0,0),(0,1),true)==1);
 
-    board.set_mark(1,1,Ai);
-    board.set_mark(2,2,Ai);
+    board.set_mark((1,1),Ai);
+    board.set_mark((2,2),Ai);
     assert!(board.count_consecutive(board.get_cell(0,0),(1,1),true)==3);
     assert!(board.count_consecutive(board.get_cell(1,0),(0,1),true)==2);
 
-    board.set_mark(0,4,Ai);
-    board.set_mark(1,3,Ai);
+    board.set_mark((0,4),Ai);
+    board.set_mark((1,3),Ai);
     assert!(board.count_consecutive(board.get_cell(0,4),(1,-1),true)==3);
 
-    board.set_mark(1,4,Ai);
-    board.set_mark(2,4,Ai);
-    board.set_mark(3,4,Ai);
-    board.set_mark(4,4,Ai);
+    board.set_mark((1,4),Ai);
+    board.set_mark((2,4),Ai);
+    board.set_mark((3,4),Ai);
+    board.set_mark((4,4),Ai);
     assert!(board.count_consecutive(board.get_cell(0,4),(1,0),true)==5);
 }
 
@@ -242,14 +248,14 @@ fn test_count_consecutive() {
 #[test]
 fn test_win() {
     let mut board = Board::new(5,5,4);
-    board.set_mark(0,0,Player);
-    board.set_mark(1,1,Player);
-    board.set_mark(2,2,Player);
+    board.set_mark((0,0),Player);
+    board.set_mark((1,1),Player);
+    board.set_mark((2,2),Player);
     //board.set_mark(3,4,Ai);
     //board.set_mark(4,4,Ai);
 
     //board.set_mark(0,4,Ai);
-    let state = board.set_mark(3,3,Player);
+    let state = board.set_mark((3,3),Player);
 
     assert!(state == PlayerWins);
 }
