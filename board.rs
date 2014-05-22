@@ -49,13 +49,13 @@ pub struct Board {
     cols : uint,
     k : uint,   //consecutive cells needed for win
     cells : Vec<Cell>,
-    state : BoardState
+    last_changed_cell : Option<uint>
 }
 
 impl Board {
     pub fn new(rows : uint, cols : uint, k : uint) -> Board {
         let cells = Vec::from_fn(rows*cols,|idx|Cell{x:idx%cols, y:idx/cols , mark: Empty});
-        Board{rows : rows, cols : cols, k : k, cells: cells, state : InProgress }
+        Board{rows : rows, cols : cols, k : k, cells: cells, last_changed_cell : None }
     }
 
     pub fn get_cell<'a>(&'a self, x : uint, y : uint) -> &'a Cell {
@@ -76,32 +76,44 @@ impl Board {
     }
 
     pub fn get_state(&self) -> BoardState {
-        self.state
-    }
+        let cell_idx = match self.last_changed_cell {
+            None => {return InProgress;},
+            Some(x) => x
+        };            
 
-    pub fn set_mark(& mut self, (x,y) : (uint,uint), mark : Mark)-> BoardState {
-        if x >= self.cols || y >= self.rows {fail!("index out of bounds")};
-        let cell_index = y * self.cols + x;
-        self.cells.get_mut(cell_index).mark = mark;
-
-        if mark == Empty {
-            self.state = InProgress;
-            return self.state;
-        }
-
-        let cell = self.cells.get(cell_index);
-        if self.check_for_win(cell) {
+        let cell = self.cells.get(cell_idx);
+        if cell.mark == Empty {
+            //We just erased a move, so we'll assume the game is in progress
+            InProgress
+        } else if self.check_for_win(cell) {
             match cell.mark {
-                Player => self.state = PlayerWins,
-                Ai => self.state = AiWins,
-                _ => fail!()
+                Player => PlayerWins,
+                Ai => AiWins,
+                _ => fail!("Unknown player won")
             }
         } else if self.cells_with_mark(Empty).len() == 0 {
-            self.state = CatsGame;
+            CatsGame
         } else {
-            self.state = InProgress;
+            InProgress
         }
-        self.state
+    }
+
+    pub fn set_mark<'a>(& mut self, (x,y) : (uint,uint), mark : Mark) {
+        if x >= self.cols || y >= self.rows {fail!("index out of bounds")};
+        let cell_idx = y * self.cols + x;        
+        self.cells.get_mut(cell_idx).mark = mark;        
+        self.last_changed_cell = Some(cell_idx);
+    }
+
+    pub fn check_valid_move(&self, move : (uint,uint)) -> bool {
+        match move {
+            (x,y) => {
+                if x >= self.get_num_cols() || y >= self.get_num_rows() {
+                    return false;
+                }
+                self.get_cell(x,y).mark == Empty
+            }
+        }
     }
 
     pub fn cells_with_mark<'a>(&'a self, mark : Mark) -> Vec<&'a Cell> {
@@ -143,30 +155,31 @@ impl Board {
 
 impl fmt::Show for Board {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f.buf, "  ");
+        let mut result = "".to_owned();
+        result = result + "  ";
+
         for x in range(0,self.cols) {
-            write!(f.buf, "{} ", x);
+            result = result + format!("{} ", x);
         }
-        write!(f.buf, "\n");
+        result = result + format!("\n");
 
         for (idx,cell) in self.cells.iter().enumerate() {
-            if(idx % self.cols == 0) {
-                write!(f.buf, "{} ", idx / self.cols);       
+            if idx % self.cols == 0 {
+                result = result + format!("{} ", idx / self.cols);       
             }
 
-            write!(f.buf, "{}", cell.mark);
-            //println!("\ncols:{} mod:{}",self.cols,idx+1 % self.cols);
-            if((idx+1) % self.cols != 0) {
-                write!(f.buf,"|");
+            result = result + format!("{}", cell.mark);
+            if (idx+1) % self.cols != 0 {
+                result = result + "|";
             } else if idx + 1 < self.cells.len() {
-                write!(f.buf, "\n  ");
+                result = result + format!("\n  ");
                 for _ in range(0,self.cols-1) {
-                    write!(f.buf, "-+");
+                    result = result + format!("-+");
                 }
-                write!(f.buf, "-\n");
+                result = result + format!("-\n");
             }
         }
-        write!(f.buf,"")
+        f.buf.write_str(result)
     }
 }
 
@@ -251,11 +264,7 @@ fn test_win() {
     board.set_mark((0,0),Player);
     board.set_mark((1,1),Player);
     board.set_mark((2,2),Player);
-    //board.set_mark(3,4,Ai);
-    //board.set_mark(4,4,Ai);
+     board.set_mark((3,3),Player);
 
-    //board.set_mark(0,4,Ai);
-    let state = board.set_mark((3,3),Player);
-
-    assert!(state == PlayerWins);
+    assert!(board.get_state() == PlayerWins);
 }

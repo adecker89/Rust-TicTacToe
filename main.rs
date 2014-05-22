@@ -1,30 +1,16 @@
 extern crate test;
 extern crate sync;
 
-use std::fmt;
 use std::io;
-use board::{Board, BoardState, Cell, Mark};
-use board::{PlayerWins,AiWins,CatsGame,InProgress};
+use board::{Board};
+use board::{InProgress};
 use board::{Player,Ai,Empty};
 use ai::{Ai};
 use ai::{Simple,Minimax,AlphaBeta};
 
-use test::Bencher;
-
 mod board;
 mod ai;
 mod minimax;
-
-pub fn check_valid_move(board: &Board, move : (uint,uint)) -> bool {
-    match move {
-        (x,y) => {
-            if x >= board.get_num_cols() || y >= board.get_num_rows() {
-                return false;
-            }
-            board.get_cell(x,y).mark == Empty
-        }
-    }
-}
 
 fn read_move() -> Option<(uint,uint)> {
     let n = io::stdin().read_line().unwrap();
@@ -40,8 +26,13 @@ fn read_move() -> Option<(uint,uint)> {
 }
 
 fn main() {
-    let mut board = Board::new(5,5,4);
-    let ai = Ai::new(AlphaBeta,6);
+    let mut board = Board::new(3,3,3);
+    // let num_cells = board.get_num_rows() * board.get_num_cols();
+
+    //decreasing function that gives 9 plies for a board with 9 cells and a minimum of 3 plies
+    // let plies = 3 * (num_cells + 18) / num_cells;
+    // println!("{}",plies);
+    let ai = Ai::new(AlphaBeta, 9);
 
     loop {
         println!("{}",board);
@@ -53,21 +44,22 @@ fn main() {
                 continue; 
             }
             Some(move) =>{
-                if !check_valid_move(&board,move) {
+                if !board.check_valid_move(move) {
                     println!("Invalid move");
                     continue;
                 }
                 move
             }
         };        
-
-        match board.set_mark(move,Player) {
+        board.set_mark(move,Player);
+        match board.get_state() {
             InProgress => (),
             _ => break
         }
 
         let ai_move = ai.get_move(&board);
-        match board.set_mark(ai_move,Ai) {
+        board.set_mark(ai_move,Ai);
+        match board.get_state() {
             InProgress => (),
             _ => break
         }
