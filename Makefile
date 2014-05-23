@@ -5,11 +5,14 @@ bar: bar.o libmnk-game.a
 bar.o: bar.c
 	gcc -g -O2 -Wall -c bar.c
 
-libmnk-game.a: mnk-game.rs main.rs board.rs ai.rs minimax.rs
-	rustc mnk-game.rs --crate-type="staticlib" -o libmnk-game.a
+libmnk-game.a: lib_main.rs main.rs board.rs ai.rs minimax.rs
+	rustc lib_main.rs --crate-type="staticlib" -o libmnk-game.a
 
-test: mnk-game.rs main.rs board.rs ai.rs minimax.rs
+rust: main.rs board.rs ai.rs minimax.rs
+	rustc main.rs -o main
+
+test: main.rs board.rs ai.rs minimax.rs
 	rustc main.rs --test -o test
 
 clean:
-	rm -rf *.a *.o bar test
+	rm -rf *.a *.o bar test main

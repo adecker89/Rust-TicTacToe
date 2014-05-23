@@ -12,10 +12,10 @@ pub enum BoardState {
 impl fmt::Show for BoardState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &PlayerWins => write!(f.buf,"Player Wins!"),
-            &AiWins => write!(f.buf,"Ai Wins!"),
-            &CatsGame => write!(f.buf,"Cats Game"),
-            &InProgress => write!(f.buf,"Game still in progress"),
+            &PlayerWins => write!(f,"Player Wins!"),
+            &AiWins => write!(f,"Ai Wins!"),
+            &CatsGame => write!(f,"Cats Game"),
+            &InProgress => write!(f,"Game still in progress"),
         }
     }
 }
@@ -29,9 +29,9 @@ pub enum Mark {
 impl fmt::Show for Mark {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Player => write!(f.buf,"X"),
-            &Ai => write!(f.buf,"O"),
-            &Empty => write!(f.buf," ")
+            &Player => write!(f,"X"),
+            &Ai => write!(f,"O"),
+            &Empty => write!(f," ")
         }
     }
 }
@@ -179,7 +179,7 @@ impl fmt::Show for Board {
                 result = result + format!("-\n");
             }
         }
-        f.buf.write_str(result)
+        f.write(result.into_bytes())
     }
 }
 
